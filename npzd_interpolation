@@ -1,0 +1,87 @@
+"""
+Created on Wed Oct 13 09:53:08 2021
+
+@author: jjacob2
+"""
+import os
+os.chdir('/home/jjacob2/python/Ideal_Ridge/npzd_coupling/')
+from netCDF4 import Dataset as nc4
+import numpy as np
+import obs_depth_vs145 as dep
+from scipy.interpolate import griddata 
+
+def load_grid(FileName, idx):
+    """
+    load grid of model output
+
+    Parameters
+    ----------
+    FileName : string
+       path to netCDF4 filet
+    idx : Dictionary
+        contains slices for lat, lon, and time
+
+    Returns
+    -------
+    Dictionary that contains, depth [m], distance [km  
+
+    """
+    file = nc4(FileName, 'r')
+    grid = {}
+    
+    #compute depth
+    romsvars = {'Vstretching' : file.variables['Vstretching'][0], \
+                'Vtransform' :file.variables['Vtransform'][0], \
+                'theta_s' : file.variables['theta_s'][0], \
+                'theta_b' : file.variables['theta_b'][0], \
+                'N' : file.variables['Cs_r'].size, \
+                'h' : file.variables['h'][:], \
+                'hc': file.variables['hc'][0]}
+    grid['depth'] = dep._set_depth(FileName, romsvars, 'rho', 
+                                   romsvars['h'])[:,idx['lat'],idx['lon']]
+    
+    #distance
+    x_rho =  file.variables['x_rho'][idx['lat'],idx['lon']]
+    grid['dist'] = np.repeat((x_rho/1000)[np.newaxis, :],
+                                   grid['depth'].shape[0], axis = 0)
+    
+    #time
+    grid['time'] = file.variables['ocean_time'][idx['time']]
+    
+    return grid
+    
+
+def load_NPZD(FileName, idx) :
+    """
+    Load variables needed for NPZD calculations
+    FileName: path and name of file [string]
+    idx: slices of dataset [dictionary]
+    """
+    #load file
+    file = nc4(FileName, 'r')
+    
+    #hist variables
+    npzd = {'n' : file.variables['NO3'][idx['time'],idx['z'],
+                                        idx['lat'],idx['lon']],
+            'p' : file.variables['phytoplankton'][idx['time'],idx['z'],
+                                                  idx['lat'],idx['lon']],
+            'z' : file.variables['zooplankton'][idx['time'],idx['z'],
+                                                idx['lat'],idx['lon']],
+            'd' : file.variables['detritus'][idx['time'],idx['z'],
+                                             idx['lat'],idx['lon']],
+            'tr': file.variables['dye_01'][idx['time'],idx['z'],
+                                           idx['lat'],idx['lon']]
+           
+            }
+    
+    #add ecosystem parameters        
+    npzd['Vm'] = file.variables['Vm_NO3'][:]
+    npzd['ks'] = file.variables['K_NO3'][:]
+    npzd['kext'] = file.variables['K_ext'][:]
+    npzd['Rm'] = file.variables['ZooGR'][:]
+    npzd['m'] = file.variables['PhyMR'][:]
+    npzd['Lam']= file.variables['K_Phy'][:]
+    
+
+    return npzd
+ 
